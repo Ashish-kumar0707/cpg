@@ -137,6 +137,5 @@ dependencies {
     testFixturesApi("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.8.2")
     testFixturesApi("org.mockito:mockito-core:4.6.1")
-    
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.2")
 }

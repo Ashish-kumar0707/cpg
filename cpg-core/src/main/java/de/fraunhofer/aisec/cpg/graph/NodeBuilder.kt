@@ -26,13 +26,11 @@
 package de.fraunhofer.aisec.cpg.graph
 
 import de.fraunhofer.aisec.cpg.frontends.LanguageFrontend
-import de.fraunhofer.aisec.cpg.frontends.cpp.CXXLanguageFrontend
-import de.fraunhofer.aisec.cpg.graph.NodeBuilder.setCodeAndRegion
 import de.fraunhofer.aisec.cpg.graph.declarations.*
 import de.fraunhofer.aisec.cpg.graph.statements.*
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.*
 import de.fraunhofer.aisec.cpg.graph.types.Type
-import de.fraunhofer.aisec.cpg.graph.types.TypeParser
+import de.fraunhofer.aisec.cpg.graph.types.UnknownType
 import de.fraunhofer.aisec.cpg.sarif.PhysicalLocation
 import org.slf4j.LoggerFactory
 
@@ -51,6 +49,7 @@ object NodeBuilder {
         val node = UsingDirective()
         node.qualifiedName = qualifiedName
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
 
         log(node)
         return node
@@ -59,18 +58,18 @@ object NodeBuilder {
     @JvmStatic
     @JvmOverloads
     fun newCallExpression(
-        name: String?,
+        callee: Expression,
         fqn: String?,
         code: String? = null,
         template: Boolean,
         lang: LanguageFrontend? = null,
         rawNode: Any? = null
     ): CallExpression {
-        val node = CallExpression()
-        node.name = name!!
+        val node = CallExpression(callee)
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
         node.fqn = fqn
-        node.setTemplate(template)
+        node.template = template
         log(node)
         return node
     }
@@ -200,7 +199,7 @@ object NodeBuilder {
     @JvmOverloads
     fun newDeclaredReferenceExpression(
         name: String?,
-        typeFullName: Type?,
+        typeFullName: Type? = UnknownType.getUnknownType(),
         code: String? = null,
         lang: LanguageFrontend? = null,
         rawNode: Any? = null
@@ -209,6 +208,7 @@ object NodeBuilder {
         node.name = name!!
         node.type = typeFullName
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
 
         log(node)
         return node
@@ -322,6 +322,7 @@ object NodeBuilder {
         node.name = name!!
         node.type = type
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
 
         node.isVariadic = variadic
         return node
@@ -374,20 +375,13 @@ object NodeBuilder {
     @JvmStatic
     @JvmOverloads
     fun newMemberCallExpression(
-        name: String?,
+        callee: MemberExpression,
         fqn: String?,
-        base: Expression?,
-        member: Node?,
-        operatorCode: String?,
         code: String? = null,
         lang: LanguageFrontend? = null,
         rawNode: Any? = null
-    ): CallExpression {
-        val node = MemberCallExpression()
-        node.name = name!!
-        node.setBase(base)
-        node.member = member
-        node.operatorCode = operatorCode
+    ): MemberCallExpression {
+        val node = MemberCallExpression(callee)
         node.setCodeAndRegion(lang, rawNode, code)
 
         node.fqn = fqn
@@ -454,6 +448,7 @@ object NodeBuilder {
         node.name = name!!
         node.type = type
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
 
         node.isImplicitInitializerAllowed = implicitInitializerAllowed
         log(node)
@@ -503,7 +498,7 @@ object NodeBuilder {
     }
 
     /**
-     * Sets the code and region, if a language frontend is specified in [lang] using
+     * Sets the code and region, if a language frontend is specified in [lang], using
      * [LanguageFrontend.setCodeAndRegion]. Additionally, if [code] is specified, the supplied code
      * is used to override it.
      */
@@ -512,6 +507,11 @@ object NodeBuilder {
         if (code != null) {
             this.code = code
         }
+    }
+
+    /** Sets the scope of this node, if a language frontend is specified in [lang]. */
+    private fun Node.setScope(lang: LanguageFrontend?) {
+        lang?.let { this.scope = it.scopeManager.currentScope }
     }
 
     @JvmStatic
@@ -662,21 +662,6 @@ object NodeBuilder {
             node.code = code
         }
 
-        // In cpp, structs are also classes
-        if ((kind == "class" || (lang is CXXLanguageFrontend && kind == "struct")) && createThis) {
-            val thisDeclaration =
-                newFieldDeclaration(
-                    "this",
-                    TypeParser.createFrom(fqn, true),
-                    listOf(),
-                    "this",
-                    null,
-                    null,
-                    true
-                )
-            node.addField(thisDeclaration)
-        }
-
         log(node)
 
         return node
@@ -750,12 +735,12 @@ object NodeBuilder {
     @JvmOverloads
     fun newFieldDeclaration(
         name: String?,
-        type: Type?,
-        modifiers: List<String?>?,
+        type: Type? = UnknownType.getUnknownType(),
+        modifiers: List<String> = listOf(),
         code: String? = null,
-        location: PhysicalLocation?,
-        initializer: Expression?,
-        implicitInitializerAllowed: Boolean,
+        location: PhysicalLocation? = null,
+        initializer: Expression? = null,
+        implicitInitializerAllowed: Boolean = false,
         lang: LanguageFrontend? = null,
         rawNode: Any? = null
     ): FieldDeclaration {
@@ -764,6 +749,7 @@ object NodeBuilder {
         node.type = type
         node.modifiers = modifiers
         node.setCodeAndRegion(lang, rawNode, code)
+        node.setScope(lang)
         node.location = location
         node.isImplicitInitializerAllowed = implicitInitializerAllowed
         if (initializer != null) {
@@ -779,21 +765,24 @@ object NodeBuilder {
     @JvmStatic
     @JvmOverloads
     fun newMemberExpression(
-        base: Expression?,
-        memberType: Type?,
+        base: Expression,
+        memberType: Type? = UnknownType.getUnknownType(),
         name: String?,
-        operatorCode: String?,
+        operatorCode: String? = ".",
         code: String? = null,
         lang: LanguageFrontend? = null,
         rawNode: Any? = null
     ): MemberExpression {
-        val node = MemberExpression()
-        node.setBase(base!!)
-        node.operatorCode = operatorCode
+        val node = MemberExpression(base, operatorCode)
+        if (name != null) {
+            node.name = name
+        }
         node.setCodeAndRegion(lang, rawNode, code)
-        node.name = name!!
+        node.setScope(lang)
         node.type = memberType
+
         log(node)
+
         return node
     }
 

@@ -45,10 +45,7 @@ import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import de.fraunhofer.aisec.cpg.frontends.Handler;
 import de.fraunhofer.aisec.cpg.graph.ProblemNode;
 import de.fraunhofer.aisec.cpg.graph.TypeManager;
-import de.fraunhofer.aisec.cpg.graph.declarations.Declaration;
-import de.fraunhofer.aisec.cpg.graph.declarations.ParamVariableDeclaration;
-import de.fraunhofer.aisec.cpg.graph.declarations.ProblemDeclaration;
-import de.fraunhofer.aisec.cpg.graph.declarations.RecordDeclaration;
+import de.fraunhofer.aisec.cpg.graph.declarations.*;
 import de.fraunhofer.aisec.cpg.graph.statements.CompoundStatement;
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Expression;
 import de.fraunhofer.aisec.cpg.graph.types.ParameterizedType;
@@ -148,6 +145,10 @@ public class DeclarationHandler
             true);
     declaration.setType(type);
 
+    var record = lang.getScopeManager().getCurrentRecord();
+
+    generateReceiver(declaration, record);
+
     // check, if constructor has body (i.e. its not abstract or something)
     BlockStmt body = constructorDecl.getBody();
 
@@ -161,16 +162,7 @@ public class DeclarationHandler
     return declaration;
   }
 
-  public de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration handleMethodDeclaration(
-      com.github.javaparser.ast.body.MethodDeclaration methodDecl) {
-    ResolvedMethodDeclaration resolvedMethod = methodDecl.resolve();
-
-    var record = lang.getScopeManager().getCurrentRecord();
-
-    de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration functionDeclaration =
-        newMethodDeclaration(
-            resolvedMethod.getName(), methodDecl.toString(), methodDecl.isStatic(), record);
-
+  private void generateReceiver(MethodDeclaration func, RecordDeclaration record) {
     // create the receiver
     var receiver =
         newVariableDeclaration(
@@ -181,9 +173,32 @@ public class DeclarationHandler
             "this",
             false);
 
-    functionDeclaration.setReceiver(receiver);
+    func.setReceiver(receiver);
+    lang.getScopeManager().addDeclaration(receiver);
+
+    if (record != null && !record.getSuperClasses().isEmpty()) {
+      // create the super receiver
+      var superReceiver =
+          newVariableDeclaration("super", record.getSuperClasses().get(0), "super", false);
+
+      func.setSuperReceiver(superReceiver);
+      lang.getScopeManager().addDeclaration(superReceiver);
+    }
+  }
+
+  public de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration handleMethodDeclaration(
+      com.github.javaparser.ast.body.MethodDeclaration methodDecl) {
+    ResolvedMethodDeclaration resolvedMethod = methodDecl.resolve();
+
+    var record = lang.getScopeManager().getCurrentRecord();
+
+    de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration functionDeclaration =
+        newMethodDeclaration(
+            resolvedMethod.getName(), methodDecl.toString(), methodDecl.isStatic(), record);
 
     lang.getScopeManager().enterScope(functionDeclaration);
+
+    generateReceiver(functionDeclaration, record);
 
     functionDeclaration.addThrowTypes(
         methodDecl.getThrownExceptions().stream()
@@ -295,13 +310,13 @@ public class DeclarationHandler
       } else if (decl instanceof com.github.javaparser.ast.body.MethodDeclaration) {
         de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration md =
             (de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration) handle(decl);
-        recordDeclaration.addMethod(md);
+        lang.getScopeManager().addDeclaration(md);
       } else if (decl instanceof com.github.javaparser.ast.body.ConstructorDeclaration) {
         de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration c =
             (de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration) handle(decl);
-        recordDeclaration.addConstructor(c);
+        lang.getScopeManager().addDeclaration(c);
       } else if (decl instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration) {
-        recordDeclaration.addDeclaration(handle(decl));
+        lang.getScopeManager().addDeclaration((handle(decl)));
       } else if (decl instanceof com.github.javaparser.ast.body.InitializerDeclaration) {
         InitializerDeclaration id = (InitializerDeclaration) decl;
         CompoundStatement initializerBlock =
@@ -322,6 +337,11 @@ public class DeclarationHandler
           newConstructorDeclaration(
               recordDeclaration.getName(), recordDeclaration.getName(), recordDeclaration);
       recordDeclaration.addConstructor(constructorDeclaration);
+
+      lang.getScopeManager().enterScope(constructorDeclaration);
+      generateReceiver(constructorDeclaration, lang.getScopeManager().getCurrentRecord());
+      lang.getScopeManager().leaveScope(constructorDeclaration);
+
       lang.getScopeManager().addDeclaration(constructorDeclaration);
     }
 
@@ -378,7 +398,8 @@ public class DeclarationHandler
             variable.toString(),
             location,
             initializer,
-            false);
+            false,
+            lang);
     lang.getScopeManager().addDeclaration(fieldDeclaration);
 
     this.lang.processAnnotations(fieldDeclaration, fieldDecl);

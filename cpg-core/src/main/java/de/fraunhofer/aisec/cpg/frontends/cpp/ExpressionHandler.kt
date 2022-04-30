@@ -27,6 +27,7 @@ package de.fraunhofer.aisec.cpg.frontends.cpp
 
 import de.fraunhofer.aisec.cpg.graph.Node
 import de.fraunhofer.aisec.cpg.graph.NodeBuilder
+import de.fraunhofer.aisec.cpg.graph.ProblemNode
 import de.fraunhofer.aisec.cpg.graph.TypeManager
 import de.fraunhofer.aisec.cpg.graph.edge.Properties
 import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge
@@ -34,7 +35,7 @@ import de.fraunhofer.aisec.cpg.graph.statements.expressions.*
 import de.fraunhofer.aisec.cpg.graph.types.*
 import de.fraunhofer.aisec.cpg.graph.types.PointerType.PointerOrigin
 import de.fraunhofer.aisec.cpg.helpers.Util
-import de.fraunhofer.aisec.cpg.passes.CallResolver
+import de.fraunhofer.aisec.cpg.passes.addImplicitTemplateParametersToCall
 import java.math.BigInteger
 import java.util.*
 import java.util.function.Supplier
@@ -216,11 +217,11 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
             // we also need to "forward" our template parameters (if we have any) to the construct
             // expression since the construct expression will do the actual template instantiation
             if (newExpression.templateParameters != null &&
-                    newExpression.templateParameters.isNotEmpty()
+                    newExpression.templateParameters?.isNotEmpty() == true
             ) {
-                CallResolver.addImplicitTemplateParametersToCall(
+                addImplicitTemplateParametersToCall(
                     newExpression.templateParameters,
-                    initializer as ConstructExpression?
+                    initializer as? ConstructExpression
                 )
             }
 
@@ -329,7 +330,8 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
     }
 
     private fun handleFieldReference(ctx: IASTFieldReference): Expression {
-        var base = handle(ctx.fieldOwner)
+        var base = handle(ctx.fieldOwner) ?: ProblemExpression("could not parse base")
+
         // Replace Literal this with a reference pointing to this
         if (base is Literal<*> && base.value == "this") {
             val location = base.location
@@ -339,7 +341,8 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
                     "this",
                     if (recordDeclaration != null) recordDeclaration.getThis().type
                     else UnknownType.getUnknownType(),
-                    base.code
+                    base.code,
+                    lang = lang
                 )
             base.location = location
         }
@@ -348,7 +351,8 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
             UnknownType.getUnknownType(),
             ctx.fieldName.toString(),
             if (ctx.isPointerDereference) "->" else ".",
-            ctx.rawSignature
+            ctx.rawSignature,
+            lang = lang
         )
     }
 
@@ -411,7 +415,7 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
     }
 
     private fun handleFunctionCallExpression(ctx: IASTFunctionCallExpression): Expression {
-        val reference = handle(ctx.functionNameExpression)
+        var reference = handle(ctx.functionNameExpression)
         val callExpression: CallExpression
         if (reference is MemberExpression) {
             val baseTypename: String
@@ -423,16 +427,14 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
                 NodeBuilder.newDeclaredReferenceExpression(
                     reference.name,
                     UnknownType.getUnknownType(),
-                    reference.name
+                    reference.name,
+                    lang = lang
                 )
             member.location = lang.getLocationFromRawNode<Expression>(reference)
             callExpression =
                 NodeBuilder.newMemberCallExpression(
-                    member.name,
+                    reference,
                     baseTypename + "." + member.name,
-                    reference.base,
-                    member,
-                    reference.operatorCode,
                     ctx.rawSignature
                 )
             if ((ctx.functionNameExpression as? IASTFieldReference)?.fieldName is CPPASTTemplateId
@@ -452,27 +454,34 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
             }
         } else if (reference is BinaryOperator && reference.operatorCode == ".") {
             // We have a dot operator that was not classified as a member expression. This happens
-            // when dealing with function pointer calls that happen on an explicit object
-            callExpression =
-                NodeBuilder.newMemberCallExpression(
-                    ctx.functionNameExpression.rawSignature,
-                    "",
-                    reference.lhs,
-                    reference.rhs,
+            // when dealing with function pointer calls that happen on an explicit object. We need
+            // to create a new member expression out of the binary operator
+            reference =
+                NodeBuilder.newMemberExpression(
+                    reference.lhs
+                        ?: ProblemExpression(
+                            "unable to parse base",
+                            ProblemNode.ProblemType.TRANSLATION
+                        ),
+                    reference.type,
+                    reference.rhs?.name,
                     reference.operatorCode,
-                    ctx.rawSignature
+                    reference.code,
+                    lang,
+                    ctx.functionNameExpression
                 )
+            callExpression = NodeBuilder.newMemberCallExpression(reference, "", ctx.rawSignature)
         } else if (reference is UnaryOperator && reference.operatorCode == "*") {
             // Classic C-style function pointer call -> let's extract the target
-            callExpression =
-                NodeBuilder.newCallExpression(reference.input.name, "", reference.code, false)
-        } else if (ctx.functionNameExpression is IASTIdExpression &&
-                (ctx.functionNameExpression as IASTIdExpression).name is CPPASTTemplateId
+            callExpression = NodeBuilder.newCallExpression(reference, "", reference.code, false)
+        } else if (ctx.functionNameExpression is CPPASTIdExpression &&
+                (ctx.functionNameExpression as CPPASTIdExpression).name is CPPASTTemplateId
         ) {
             val name =
                 ((ctx.functionNameExpression as IASTIdExpression).name as CPPASTTemplateId)
                     .templateName.toString()
-            callExpression = NodeBuilder.newCallExpression(name, name, ctx.rawSignature, true)
+            val ref = NodeBuilder.newDeclaredReferenceExpression(name, UnknownType.getUnknownType())
+            callExpression = NodeBuilder.newCallExpression(ref, name, ctx.rawSignature, true)
             callExpression.addExplicitTemplateParameters(
                 getTemplateArguments(
                     (ctx.functionNameExpression as IASTIdExpression).name as CPPASTTemplateId
@@ -501,7 +510,7 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
             // if (!fullNamePrefix.isEmpty()) {
             //  fqn = fullNamePrefix + "." + fqn;
             // }
-            callExpression = NodeBuilder.newCallExpression(name, fqn, ctx.rawSignature, false)
+            callExpression = NodeBuilder.newCallExpression(reference, fqn, ctx.rawSignature, false)
         }
 
         for ((i, argument) in ctx.arguments.withIndex()) {
@@ -521,7 +530,8 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
             NodeBuilder.newDeclaredReferenceExpression(
                 ctx.name.toString(),
                 UnknownType.getUnknownType(),
-                ctx.rawSignature
+                ctx.rawSignature,
+                lang = lang
             )
         val proxy = expressionTypeProxy(ctx)
         if (proxy is CPPClassInstance) {
@@ -716,7 +726,8 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
                             NodeBuilder.newDeclaredReferenceExpression(
                                 des.name.toString(),
                                 UnknownType.getUnknownType(),
-                                des.getRawSignature()
+                                des.getRawSignature(),
+                                lang = lang
                             )
                     }
                     is CPPASTArrayRangeDesignator -> {

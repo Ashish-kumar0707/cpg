@@ -52,6 +52,10 @@ public class MethodDeclaration extends FunctionDeclaration {
   @Nullable
   private VariableDeclaration receiver;
 
+  @SubGraph("AST")
+  @Nullable
+  private VariableDeclaration superReceiver;
+
   public boolean isStatic() {
     return isStatic;
   }
@@ -76,5 +80,15 @@ public class MethodDeclaration extends FunctionDeclaration {
 
   public void setReceiver(@Nullable VariableDeclaration receiver) {
     this.receiver = receiver;
+  }
+
+  @org.jetbrains.annotations.Nullable
+  public VariableDeclaration getSuperReceiver() {
+    return superReceiver;
+  }
+
+  public void setSuperReceiver(
+      @org.jetbrains.annotations.Nullable VariableDeclaration superReceiver) {
+    this.superReceiver = superReceiver;
   }
 }

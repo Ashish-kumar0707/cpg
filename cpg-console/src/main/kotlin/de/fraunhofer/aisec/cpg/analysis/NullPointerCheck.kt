@@ -57,10 +57,6 @@ class NullPointerCheck {
                         handleHasBase(v)
                     }
 
-                    fun visit(v: CallExpression) {
-                        handleHasBase(v)
-                    }
-
                     fun visit(v: MemberExpression) {
                         handleHasBase(v)
                     }
@@ -76,7 +72,7 @@ class NullPointerCheck {
     fun handleHasBase(node: HasBase) {
         try {
             // check for all incoming DFG branches
-            node.base.prevDFG.forEach {
+            node.base?.prevDFG?.forEach {
                 var resolved: Any? = CouldNotResolve()
                 val resolver = ValueEvaluator()
                 if (it is Expression || it is Declaration) {
@@ -90,7 +86,7 @@ class NullPointerCheck {
                     sb.append("--- FINDING: Null pointer detected in ")
                     sb.append(node.javaClass.simpleName, DEFAULT.foreground(GREEN))
                     sb.append(" when accessing base ")
-                    sb.append(node.base.name, DEFAULT.foreground(YELLOW))
+                    sb.append(node.base?.name ?: "", DEFAULT.foreground(YELLOW))
                     sb.append(" ---")
 
                     val header = sb.toAnsi()
@@ -104,7 +100,7 @@ class NullPointerCheck {
                     )
                     println("")
                     println(
-                        "The following path was discovered that leads to ${AttributedString(node.base.name, DEFAULT.foreground(YELLOW)).toAnsi()} being null:"
+                        "The following path was discovered that leads to ${AttributedString(node.base?.name ?: "", DEFAULT.foreground(YELLOW)).toAnsi()} being null:"
                     )
                     for (p in resolver.path) {
 

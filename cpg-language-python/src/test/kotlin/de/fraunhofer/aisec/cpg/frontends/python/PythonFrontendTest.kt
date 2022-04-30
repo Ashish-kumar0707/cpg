@@ -139,7 +139,7 @@ class PythonFrontendTest : BaseTest() {
         assertEquals("bar", callExpression.name)
         assertEquals(bar, callExpression.invokes.iterator().next())
 
-        val edge = callExpression.argumentsPropertyEdge[1]
+        val edge = callExpression.argumentEdges[1]
 
         assertEquals("s2", edge.getProperty(Properties.NAME))
 
@@ -491,14 +491,14 @@ class PythonFrontendTest : BaseTest() {
         val fooMemCall =
             (foo.body as? CompoundStatement)?.statements?.get(0) as? MemberCallExpression
         assertNotNull(fooMemCall)
-        val mem = fooMemCall.member as? DeclaredReferenceExpression
+        val mem = fooMemCall.callee as? MemberExpression
         assertNotNull(mem)
         assertEquals("bar", mem.name)
         assertEquals(".", fooMemCall.operatorCode)
         assertEquals("Foo.bar", fooMemCall.fqn)
         assertEquals(1, fooMemCall.invokes.size)
         assertEquals(bar, fooMemCall.invokes[0])
-        assertEquals("self", fooMemCall.base.name)
+        assertEquals("self", fooMemCall.base?.name ?: "")
     }
 
     @Test
@@ -901,7 +901,8 @@ class PythonFrontendTest : BaseTest() {
         assertNotNull(baseBase)
         assertEquals("bar", baseBase.name)
 
-        val member = initializer.member as? DeclaredReferenceExpression
+        // TODO: probably wrong
+        val member = initializer.callee as? DeclaredReferenceExpression
         assertNotNull(member)
         assertEquals("zzz", member.name)
     }

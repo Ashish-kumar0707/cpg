@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Fraunhofer AISEC. All rights reserved.
+ * Copyright (c) 2022, Fraunhofer AISEC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,36 +23,21 @@
  *                    \______/ \__|       \______/
  *
  */
-package de.fraunhofer.aisec.cpg.passes.scopes;
+package de.fraunhofer.aisec.cpg.graph
 
-import de.fraunhofer.aisec.cpg.graph.Node;
+import de.fraunhofer.aisec.cpg.passes.scopes.Scope
 
-public class NameScope extends StructureDeclarationScope {
+/**
+ * Represents a name of a declaration, it is either used as the name of the declaration itself or in
+ * a reference to the particular declaration.
+ *
+ * A name has different parts, one part is the so called simple name, which represents how the
+ * declaration is seen in the current scope. Furthermore, the fully qualified name can be retrieved,
+ * which includes the simple name as well as any other names that introduce additional scope to the
+ * name, such as a class, a namespace or a package.
+ */
+class Name {
 
-  private String namePrefix;
-
-  public NameScope(Node node, String currentPrefix, String delimiter) {
-    super(node);
-    if (currentPrefix == null || !currentPrefix.isEmpty()) {
-      String nodeName = node.getName();
-      // If the name already contains some form of prefix we have to remove it.
-      nodeName =
-          nodeName.contains(delimiter)
-              ? nodeName.substring(nodeName.lastIndexOf(delimiter) + delimiter.length())
-              : nodeName;
-      this.namePrefix = currentPrefix + delimiter + nodeName;
-    } else {
-      this.namePrefix = node.getName();
-    }
-
-    this.setAstNode(node);
-  }
-
-  public String getNamePrefix() {
-    return namePrefix;
-  }
-
-  public void setNamePrefix(String namePrefix) {
-    this.namePrefix = namePrefix;
-  }
+    /** The scope that is associated to the name. */
+    val scope: Scope? = null
 }

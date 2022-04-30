@@ -32,11 +32,10 @@ import de.fraunhofer.aisec.cpg.graph.TypeManager
 import de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration
 import de.fraunhofer.aisec.cpg.graph.declarations.Declaration
 import de.fraunhofer.aisec.cpg.graph.declarations.FunctionDeclaration
-import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge
 import de.fraunhofer.aisec.cpg.graph.types.Type
 import de.fraunhofer.aisec.cpg.graph.types.TypeParser
 import de.fraunhofer.aisec.cpg.graph.types.UnknownType
-import de.fraunhofer.aisec.cpg.passes.CallResolver
+import de.fraunhofer.aisec.cpg.passes.NewResolver
 import org.apache.commons.lang3.builder.ToStringBuilder
 
 /**
@@ -51,19 +50,19 @@ class ConstructExpression : CallExpression(), HasType.TypeListener {
      * The link to the [ConstructorDeclaration]. This is populated by the
      * [de.fraunhofer.aisec.cpg.passes.CallResolver] later.
      */
-    @PopulatedByPass(CallResolver::class)
+    @PopulatedByPass(NewResolver::class)
     var constructor: ConstructorDeclaration? = null
         set(value) {
             field = value
 
             // Forward to CallExpression. This will also take care of DFG edges.
             if (value != null) {
-                setInvokes(listOf(value as FunctionDeclaration))
+                invokes = listOf(value as FunctionDeclaration)
             }
         }
 
     /** The [Declaration] of the type this expression instantiates. */
-    @PopulatedByPass(CallResolver::class)
+    @PopulatedByPass(NewResolver::class)
     var instantiates: Declaration? = null
         set(value) {
             field = value
@@ -101,10 +100,7 @@ class ConstructExpression : CallExpression(), HasType.TypeListener {
             return false
         }
 
-        return super.equals(other) &&
-            constructor == other.constructor &&
-            arguments == other.arguments &&
-            PropertyEdge.propertyEqualsList(argumentsPropertyEdge, other.argumentsPropertyEdge)
+        return super.equals(other) && constructor == other.constructor
     }
 
     override fun hashCode(): Int {

@@ -37,6 +37,8 @@ import de.fraunhofer.aisec.cpg.graph.statements.Statement;
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Expression;
 import de.fraunhofer.aisec.cpg.graph.types.Type;
 import de.fraunhofer.aisec.cpg.graph.types.UnknownType;
+import de.fraunhofer.aisec.cpg.passes.scopes.FunctionScope;
+import de.fraunhofer.aisec.cpg.passes.scopes.Scope;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -45,7 +47,8 @@ import org.jetbrains.annotations.Nullable;
 import org.neo4j.ogm.annotation.Relationship;
 
 /** Represents the declaration or definition of a function. */
-public class FunctionDeclaration extends ValueDeclaration implements DeclarationHolder {
+public class FunctionDeclaration extends ValueDeclaration
+    implements DeclarationHolder, ScopeHolder<FunctionScope> {
 
   private static final String WHITESPACE = " ";
   private static final String BRACKET_LEFT = "(";
@@ -400,5 +403,19 @@ public class FunctionDeclaration extends ValueDeclaration implements Declaration
     list.addAll(this.getRecords());
 
     return list;
+  }
+
+  @Override
+  public void newScope(Scope parent) {
+    // TODO(oxisto): This functionality should be called somewhere else, the class should only
+    // create the new scope
+    var scope = new FunctionScope(this);
+
+    if (parent != null) {
+      scope.setParent(parent);
+      parent.getChildren().add(scope);
+    }
+
+    this.setScope(scope);
   }
 }

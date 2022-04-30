@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Fraunhofer AISEC. All rights reserved.
+ * Copyright (c) 2022, Fraunhofer AISEC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,36 +23,17 @@
  *                    \______/ \__|       \______/
  *
  */
-package de.fraunhofer.aisec.cpg.passes.scopes;
+package de.fraunhofer.aisec.cpg.graph
 
-import de.fraunhofer.aisec.cpg.graph.Node;
+import de.fraunhofer.aisec.cpg.graph.declarations.Declaration
+import de.fraunhofer.aisec.cpg.passes.Inference
 
-public class NameScope extends StructureDeclarationScope {
+interface NeedsResolution<SourceType : Node> {
 
-  private String namePrefix;
+    var resolutionDecider: ResolutionDecider<*, SourceType>?
+}
 
-  public NameScope(Node node, String currentPrefix, String delimiter) {
-    super(node);
-    if (currentPrefix == null || !currentPrefix.isEmpty()) {
-      String nodeName = node.getName();
-      // If the name already contains some form of prefix we have to remove it.
-      nodeName =
-          nodeName.contains(delimiter)
-              ? nodeName.substring(nodeName.lastIndexOf(delimiter) + delimiter.length())
-              : nodeName;
-      this.namePrefix = currentPrefix + delimiter + nodeName;
-    } else {
-      this.namePrefix = node.getName();
-    }
+interface ResolutionDecider<TargetType : Node, SourceType : Node> {
 
-    this.setAstNode(node);
-  }
-
-  public String getNamePrefix() {
-    return namePrefix;
-  }
-
-  public void setNamePrefix(String namePrefix) {
-    this.namePrefix = namePrefix;
-  }
+    fun decide(symbols: List<Declaration>, source: SourceType, inference: Inference?): Declaration?
 }

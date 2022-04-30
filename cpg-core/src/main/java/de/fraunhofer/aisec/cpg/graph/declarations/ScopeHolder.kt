@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Fraunhofer AISEC. All rights reserved.
+ * Copyright (c) 2022, Fraunhofer AISEC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,36 +23,15 @@
  *                    \______/ \__|       \______/
  *
  */
-package de.fraunhofer.aisec.cpg.passes.scopes;
+package de.fraunhofer.aisec.cpg.graph.declarations
 
-import de.fraunhofer.aisec.cpg.graph.Node;
+import de.fraunhofer.aisec.cpg.passes.scopes.FunctionScope
+import de.fraunhofer.aisec.cpg.passes.scopes.Scope
 
-public class NameScope extends StructureDeclarationScope {
-
-  private String namePrefix;
-
-  public NameScope(Node node, String currentPrefix, String delimiter) {
-    super(node);
-    if (currentPrefix == null || !currentPrefix.isEmpty()) {
-      String nodeName = node.getName();
-      // If the name already contains some form of prefix we have to remove it.
-      nodeName =
-          nodeName.contains(delimiter)
-              ? nodeName.substring(nodeName.lastIndexOf(delimiter) + delimiter.length())
-              : nodeName;
-      this.namePrefix = currentPrefix + delimiter + nodeName;
-    } else {
-      this.namePrefix = node.getName();
-    }
-
-    this.setAstNode(node);
-  }
-
-  public String getNamePrefix() {
-    return namePrefix;
-  }
-
-  public void setNamePrefix(String namePrefix) {
-    this.namePrefix = namePrefix;
-  }
+/**
+ * Represents a class that defines a new scope, for example a [FunctionDeclaration] defines a
+ * [FunctionScope].
+ */
+interface ScopeHolder<T : Scope> {
+    fun newScope(parent: Scope?)
 }

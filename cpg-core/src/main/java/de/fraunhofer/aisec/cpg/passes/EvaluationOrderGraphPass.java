@@ -475,8 +475,8 @@ public class EvaluationOrderGraphPass extends Pass {
 
     // evaluate base first, if there is one
     if (callExpression instanceof MemberCallExpression
-        && callExpression.getBase() instanceof Statement) {
-      createEOG(callExpression.getBase());
+        && ((MemberCallExpression) callExpression).getBase() != null) {
+      createEOG(((MemberCallExpression) callExpression).getBase());
     }
 
     // first the arguments

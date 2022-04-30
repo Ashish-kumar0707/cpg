@@ -25,7 +25,6 @@
  */
 package de.fraunhofer.aisec.cpg
 
-import de.fraunhofer.aisec.cpg.TestUtils.flattenIsInstance
 import de.fraunhofer.aisec.cpg.frontends.CompilationDatabase
 import de.fraunhofer.aisec.cpg.graph.Node
 import de.fraunhofer.aisec.cpg.graph.TypeManager

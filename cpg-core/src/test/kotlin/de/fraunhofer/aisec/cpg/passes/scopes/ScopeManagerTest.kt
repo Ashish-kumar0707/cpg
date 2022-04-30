@@ -33,6 +33,10 @@ import de.fraunhofer.aisec.cpg.frontends.TranslationException
 import de.fraunhofer.aisec.cpg.frontends.cpp.CXXLanguageFrontend
 import de.fraunhofer.aisec.cpg.frontends.java.JavaLanguageFrontend
 import de.fraunhofer.aisec.cpg.graph.NodeBuilder
+import de.fraunhofer.aisec.cpg.graph.NodeBuilder.newMethodDeclaration
+import de.fraunhofer.aisec.cpg.graph.NodeBuilder.newNamespaceDeclaration
+import de.fraunhofer.aisec.cpg.graph.NodeBuilder.newRecordDeclaration
+import de.fraunhofer.aisec.cpg.graph.TypeManager
 import de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration
 import de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration
 import java.io.File
@@ -72,7 +76,7 @@ internal class ScopeManagerTest : BaseTest() {
 
         methods.forEach {
             val scope = scopeManager.lookupScope(it)
-            assertSame(it, scope!!.getAstNode())
+            assertSame(it, scope!!.astNode)
         }
 
         val constructors = flattenListIsInstance<ConstructorDeclaration>(tu.declarations)
@@ -83,7 +87,7 @@ internal class ScopeManagerTest : BaseTest() {
         // which later gets 'upgraded' to a constructor declaration.
         constructors.forEach {
             val scope = scopeManager.lookupScope(it)
-            assertSame(it, scope!!.getAstNode())
+            assertSame(it, scope!!.astNode)
         }
     }
 
@@ -135,7 +139,13 @@ internal class ScopeManagerTest : BaseTest() {
         assertEquals(scopeA, final.lookupScope(namespaceA2))
 
         // resolve symbol
-        val call = NodeBuilder.newCallExpression("func1", "A::func1", null, false)
+        val call =
+            NodeBuilder.newCallExpression(
+                NodeBuilder.newDeclaredReferenceExpression("func1"),
+                "A::func1",
+                null,
+                false
+            )
         val func = final.resolveFunction(call).firstOrNull()
 
         assertEquals(func1, func)
@@ -169,5 +179,28 @@ internal class ScopeManagerTest : BaseTest() {
 
         val scope = s.lookupScope("A::B")
         assertNotNull(scope)
+    }
+
+    @Test
+    fun testLookupQualified() {
+        val sm = ScopeManager()
+        var method: MethodDeclaration? = null
+
+        sm.lang = CXXLanguageFrontend(TranslationConfiguration.builder().build(), sm)
+        TypeManager.getInstance().setLanguageFrontend(sm.lang as CXXLanguageFrontend)
+
+        // Push some example scopes to populate FQN map
+        sm.withScope(newNamespaceDeclaration("A")) {
+            val record = newRecordDeclaration("A::B", "class")
+            sm.addDeclaration(record)
+            sm.withScope(record) {
+                method = newMethodDeclaration("foo", null, false, record)
+                sm.addDeclaration(method)
+            }
+        }
+
+        val list = sm.lookupQualified("A::B::foo")
+
+        assertEquals(listOf(method!!), list)
     }
 }
